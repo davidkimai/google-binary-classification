@@ -1,240 +1,173 @@
 # Binary Classification: Turkish Rice Species
 
-Production implementation of Google ML Crash Course binary classification exercise. Classifies rice grains into two species (Cammeo and Osmancik) using morphological measurements.
+Production binary classification framework from Google ML Crash Course. Classifies Turkish rice grains (Cammeo/Osmancik) using morphological features.
 
-**Dataset:** Cinar & Koklu 2019 (CC0 License)  
-**Citation:** [DOI:10.18201/ijisae.2019355381](https://doi.org/10.18201/ijisae.2019355381)
-
----
-
-## Features
-
-- **Minimal complexity, maximal signal:** Single-file core implementation (~380 lines)
-- **Plug-and-play API:** Simple `fit/predict/evaluate` interface
-- **Reproducible:** Fixed random seeds and versioned dependencies
-- **Enterprise-ready:** Type hints, error handling, configuration management
-- **No external frameworks:** Eliminates google-ml-edu dependency
-
----
-
-## Installation
-
-```bash
-git clone https://github.com/davidkimai/google-binary-classification.git
-cd google-binary-classification
-pip install -r requirements.txt
-```
-
-**Requirements:** Python 3.8+, TensorFlow 2.18, Keras 3.8
+**Dataset:** Cinar & Koklu 2019 ([DOI:10.18201/ijisae.2019355381](https://doi.org/10.18201/ijisae.2019355381))
 
 ---
 
 ## Quick Start
 
-### Python API
-
-```python
-from rice_classifier import RiceClassifier, Config
-
-# Create classifier with default settings (3 features)
-config = Config()
-classifier = RiceClassifier(config)
-
-# Train and evaluate
-results = classifier.fit(verbose=1)
-print(f"Test accuracy: {results['test_accuracy']:.3f}")
-print(f"Test AUC: {results['test_auc']:.3f}")
-
-# Make predictions
-predictions = classifier.predict(test_features)
-binary_predictions = classifier.predict_classes(test_features)
-```
-
-### Command Line
-
 ```bash
-# Train baseline model (3 features, matches Colab)
+# Install
+pip install -r requirements.txt
+
+# Train baseline model (3 features, ~90% accuracy)
 python train.py --experiment baseline
 
-# Train full model (7 features)
+# Train full model (7 features, ~92% accuracy)
 python train.py --experiment full
 
-# Compare both models
+# Compare both
 python train.py --experiment compare
-
-# Custom configuration
-python train.py --features Area Eccentricity Perimeter \
-                --epochs 100 \
-                --learning-rate 0.002 \
-                --threshold 0.4
-
-# Save trained model
-python train.py --experiment full --save rice_model.keras
 ```
 
 ---
 
-## Reproducing Colab Results
+## Python API
 
-The original Colab trains two models:
+```python
+from rice_classifier import RiceClassifier, load_rice_data, split_data
 
-### Baseline Model (3 features)
-- Features: `Eccentricity`, `Major_Axis_Length`, `Area`
-- Threshold: 0.35
-- Expected test accuracy: ~90%
+# Load data
+df = load_rice_data()
+train_df, val_df, test_df = split_data(df)
+
+# Train classifier
+clf = RiceClassifier(features=['Area', 'Eccentricity', 'Major_Axis_Length'])
+clf.fit(train_df, verbose=1)
+
+# Evaluate
+metrics = clf.evaluate(test_df)
+print(f"Test accuracy: {metrics['accuracy']:.3f}")
+
+# Predict
+predictions = clf.predict(test_df)
+classes = clf.predict_classes(test_df)
+
+# Deploy
+clf.save('model.pkl')
+loaded = RiceClassifier.load('model.pkl')
+```
+
+---
+
+## CLI Usage
 
 ```bash
-python train.py --experiment baseline
-```
+# Predefined experiments
+python train.py --experiment baseline  # 3 features
+python train.py --experiment full      # 7 features
 
-### Full Model (7 features)
-- Features: All 7 morphological measurements
-- Threshold: 0.5
-- Expected test accuracy: ~92%
+# Custom configuration
+python train.py \
+  --features Area Eccentricity Perimeter \
+  --epochs 100 \
+  --learning-rate 0.002 \
+  --threshold 0.4 \
+  --save model.pkl
 
-```bash
-python train.py --experiment full
-```
-
-### Side-by-Side Comparison
-```bash
-python train.py --experiment compare
-```
-
-**Expected output:**
-```
-COMPARISON SUMMARY
-================================================================
-           experiment           features  train_accuracy  ...
-  Baseline (3 features)  Eccentricity...          0.9205  ...
-      Full (7 features)  Area, Perime...          0.9231  ...
+# Training options
+--verbose {0,1,2}      # 0=silent, 1=progress bar, 2=epoch-by-epoch
+--save PATH            # Save trained model
 ```
 
 ---
 
 ## API Reference
 
-### `Config`
+### `Preprocessor`
 
-Dataclass for hyperparameters and settings.
+Feature preprocessor with fit/transform pattern.
 
-**Key parameters:**
-- `input_features` (List[str]): Feature names to use
-- `learning_rate` (float): Learning rate for RMSprop optimizer (default: 0.001)
-- `number_epochs` (int): Training epochs (default: 60)
-- `batch_size` (int): Batch size (default: 100)
-- `classification_threshold` (float): Binary classification threshold (default: 0.35)
-- `train_ratio` / `validation_ratio` / `test_ratio`: Data split ratios (default: 0.8/0.1/0.1)
+```python
+prep = Preprocessor(features=['Area', 'Eccentricity'])
+prep.fit(train_df)
+X_train, y_train = prep.transform(train_df)
+X_test, y_test = prep.transform(test_df, return_labels=False)
+```
 
-**Available features:**
-`Area`, `Perimeter`, `Major_Axis_Length`, `Minor_Axis_Length`, `Eccentricity`, `Convex_Area`, `Extent`
+**Methods:**
+- `fit(df)` - Fit normalization on training data
+- `transform(df, return_labels=True)` - Transform to normalized features
+- `fit_transform(df)` - Fit and transform in one step
 
 ### `RiceClassifier`
 
-Main classifier class with scikit-learn-style API.
+Binary classifier with sklearn-style interface.
+
+```python
+clf = RiceClassifier(
+    features=['Area', 'Eccentricity'],
+    config=ClassifierConfig(learning_rate=0.001, epochs=60)
+)
+```
 
 **Methods:**
+- `fit(df, labels=None, validation_data=None, verbose=0)` - Train model
+- `predict(df)` - Predict probabilities
+- `predict_classes(df)` - Predict binary classes
+- `evaluate(df, labels=None)` - Compute metrics
+- `save(path)` - Serialize to disk
+- `load(path)` - Load from disk (classmethod)
+- `get_history()` - Get training history
 
-#### `__init__(config: Config)`
-Initialize classifier with configuration.
+### `ClassifierConfig`
 
-#### `fit(verbose: int = 0) -> Dict[str, float]`
-Train model and return metrics for train/validation/test splits.
+```python
+config = ClassifierConfig(
+    learning_rate=0.001,
+    epochs=60,
+    batch_size=100,
+    threshold=0.35,
+    train_ratio=0.8,
+    validation_ratio=0.1,
+    random_state=100
+)
+```
 
-**Returns:** Dictionary with keys like `train_accuracy`, `validation_auc`, `test_precision`, etc.
+### Utility Functions
 
-#### `predict(features: Dict[str, np.ndarray]) -> np.ndarray`
-Predict probabilities for positive class (Cammeo).
-
-**Args:**
-- `features`: Dict mapping feature names to numpy arrays
-
-**Returns:** Array of probabilities [0, 1]
-
-#### `predict_classes(features: Dict[str, np.ndarray]) -> np.ndarray`
-Predict binary classes using configured threshold.
-
-**Returns:** Binary array (0=Osmancik, 1=Cammeo)
-
-#### `evaluate(features: Dict, labels: np.ndarray) -> Dict[str, float]`
-Evaluate model on given data.
-
-**Returns:** Dictionary of metrics (accuracy, precision, recall, AUC)
-
-#### `save(path: str)`
-Save model to disk in Keras format.
-
-#### `get_history() -> pd.DataFrame`
-Get training history with metrics per epoch.
+- `load_rice_data(url, cache_path)` - Load dataset with caching
+- `split_data(df, train_ratio, validation_ratio, random_state)` - Split into train/val/test
+- `run_experiment(name, features, config, verbose)` - Complete experiment workflow
 
 ---
 
 ## Architecture
 
-### Data Pipeline
-1. **Load:** Download from URL or load from cache
-2. **Validate:** Check schema and required columns
-3. **Split:** 80/10/10 train/validation/test with shuffling (seed=100)
-4. **Normalize:** Z-score normalization fitted on training data
-5. **Encode:** Binary labels (Cammeo=1, Osmancik=0)
+**Data Pipeline:**
+1. Load from URL or cache
+2. Split 80/10/10 (train/val/test)
+3. Z-score normalize features (fit on train)
+4. Encode labels (Cammeo=1, Osmancik=0)
 
-### Model Architecture
+**Model:**
 ```
-Input_1 (Eccentricity)  ─┐
-Input_2 (Major_Axis)    ─┼─> Concatenate ─> Dense(1, sigmoid) ─> Output
-Input_3 (Area)          ─┘
+Input_1 ─┐
+Input_2 ─┼─> Concatenate ─> Dense(1, sigmoid) ─> Output
+Input_N ─┘
 ```
 
-- **Type:** Logistic regression (sigmoid activation)
-- **Loss:** Binary crossentropy
-- **Optimizer:** RMSprop
-- **Metrics:** Accuracy, Precision, Recall, AUC
+- Loss: Binary crossentropy
+- Optimizer: RMSprop
+- Metrics: Accuracy, Precision, Recall, AUC
 
-### Training
-- **Epochs:** 60 (default)
-- **Batch size:** 100
-- **Validation:** Computed on separate validation set
-- **Final test:** Held-out test set for final metrics
+**Available Features:**
+`Area`, `Perimeter`, `Major_Axis_Length`, `Minor_Axis_Length`, `Eccentricity`, `Convex_Area`, `Extent`
 
 ---
 
-## Customization Examples
+## Reproducing Colab Results
 
-### Change feature set
-```python
-config = Config(input_features=['Area', 'Perimeter', 'Extent'])
-classifier = RiceClassifier(config)
-results = classifier.fit()
-```
+| Model | Features | Threshold | Expected Accuracy |
+|-------|----------|-----------|-------------------|
+| Baseline | 3 (Eccentricity, Major_Axis, Area) | 0.35 | ~90% |
+| Full | All 7 features | 0.5 | ~92% |
 
-### Adjust hyperparameters
-```python
-config = Config(
-    learning_rate=0.002,
-    number_epochs=100,
-    batch_size=50,
-    classification_threshold=0.4
-)
-```
-
-### Access training history
-```python
-classifier = RiceClassifier(config)
-classifier.fit(verbose=0)
-
-history = classifier.get_history()
-print(history[['accuracy', 'auc']])  # Metrics per epoch
-```
-
-### Save and load models
-```python
-# Train and save
-classifier.fit()
-classifier.save('my_model.keras')
-
-# Load and use (note: requires manual reconstruction)
-import keras
-loaded_model = keras.models.load_model('my_model.keras')
+```bash
+python train.py --experiment baseline  # Expected: ~90% test accuracy
+python train.py --experiment full      # Expected: ~92% test accuracy
 ```
 
 ---
@@ -243,59 +176,41 @@ loaded_model = keras.models.load_model('my_model.keras')
 
 ```
 google-binary-classification/
-├── rice_classifier.py       # Core implementation (data, model, training)
-├── train.py                 # CLI entry point for experiments
-├── requirements.txt         # Python dependencies
-├── README.md               # This file
-└── .gitignore              # Git ignore rules
+├── rice_classifier.py    # Core: Preprocessor, Classifier, utilities
+├── train.py              # CLI for experiments
+├── requirements.txt      # Dependencies (Keras 3.8, TensorFlow 2.18)
+├── README.md            # Documentation
+└── .gitignore           # Git ignore rules
 ```
 
-**Total: 5 files** — minimal complexity, maximal signal.
+**5 files total** — minimal complexity, maximal signal.
 
 ---
 
-## Differences from Original Colab
+## Key Improvements Over Colab
 
-### Improvements
-- **Eliminated dependency** on `google-ml-edu` package
-- **Consolidated** scattered notebook cells into cohesive module
-- **Added** reproducibility via config management and fixed seeds
-- **Implemented** clean API with type hints and docstrings
-- **Removed** Colab-specific elements (@title decorators, magic commands)
-- **Enhanced** error handling and data validation
-
-### Preserved
-- **Identical** model architecture and training procedure
-- **Same** hyperparameters and random seeds (42, 100)
-- **Matching** metrics and evaluation methodology
-- **Expected** ~90-92% test accuracy results
+- **DataFrame-first API**: Natural sklearn-style interface
+- **Proper serialization**: Save/load entire pipeline (preprocessor + model)
+- **Stateless design**: No data hoarding post-training
+- **Generalizable**: Works beyond rice dataset as binary classification framework
+- **Production-ready**: Type hints, error handling, validation
+- **Dependency-free**: Eliminates google-ml-edu package
 
 ---
 
-## Testing
+## Requirements
 
-Manual validation against original Colab:
+- Python 3.8+
+- TensorFlow 2.18
+- Keras 3.8
+- NumPy 2.0
+- Pandas 2.2
 
-```python
-# Verify baseline model achieves ~90% test accuracy
-python train.py --experiment baseline
-# Expected: test_accuracy ≈ 0.90
-
-# Verify full model achieves ~92% test accuracy  
-python train.py --experiment full
-# Expected: test_accuracy ≈ 0.92
-```
-
-**Note:** Minor variations (±2%) are expected due to:
-- TensorFlow version differences
-- Hardware/platform variations
-- Floating-point precision
+Install: `pip install -r requirements.txt`
 
 ---
 
 ## Citation
-
-If you use this implementation, please cite the original dataset:
 
 ```bibtex
 @article{cinar2019rice,
@@ -314,19 +229,6 @@ If you use this implementation, please cite the original dataset:
 
 ## License
 
-This implementation follows the dataset's CC0 license. See [Kaggle dataset page](https://www.kaggle.com/datasets/muratkokludataset/rice-dataset-commeo-and-osmancik) for details.
+CC0 (Public Domain) — matches dataset license.
 
----
-
-## Contributing
-
-This repository implements Google's ML Crash Course exercise. For bugs or improvements, please open an issue at:
-
-**https://github.com/davidkimai/google-binary-classification**
-
----
-
-## Contact
-
-**Repository:** https://github.com/davidkimai/google-binary-classification  
-**Course:** [Google ML Crash Course - Binary Classification](https://developers.google.com/machine-learning/crash-course)
+**Repository:** https://github.com/davidkimai/google-binary-classification
