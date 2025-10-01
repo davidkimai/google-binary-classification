@@ -1,6 +1,6 @@
 # Binary Classification: Turkish Rice Species
 
-Production binary classification framework from Google ML Crash Course. Classifies Turkish rice grains (Cammeo/Osmancik) using morphological features.
+Production binary classification framework from [**Google ML Crash Course**](https://developers.google.com/machine-learning/crash-course/classification). Classifies Turkish rice grains (Cammeo/Osmancik) using morphological features.
 
 **Dataset:** Cinar & Koklu 2019 ([DOI:10.18201/ijisae.2019355381](https://doi.org/10.18201/ijisae.2019355381))
 
